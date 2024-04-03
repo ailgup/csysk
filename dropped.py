@@ -2,8 +2,8 @@ import requests
 import feedparser
 import os
 import json
-
-FEED = "https://pinecast.com/feed/catholicstuff2010-2013"
+from keys import API_KEYS
+FEED = "https://pinecast.com/feed/catholicstuff2014-2019"
 
 def get_transcription(transcription_id, key):
     url = f"https://api.gladia.io/v2/transcription/{transcription_id}"
@@ -101,5 +101,7 @@ def get_entries(key):
     print(len(todo))
     return todo
 if __name__ == "__main__":
-    get_todo()
-    main("25e814bc-0df6-43fe-90af-2e53c2e5de02")
+    #get_todo()
+    #main("25e814bc-0df6-43fe-90af-2e53c2e5de02")
+    for key in API_KEYS:
+        get_entries(key["key"])
