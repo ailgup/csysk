@@ -56,17 +56,17 @@ window.addEventListener('wheel', () => {
 window.addEventListener('mousemove', () => {
     setTimeout(() => {
         isUserScrolling = false;
-    }, 100);
+    }, 200);
 });
 
 window.addEventListener('touchend', () => {
     setTimeout(() => {
         isUserScrolling = false;
-    }, 100);
+    }, 200);
 });
 
 window.addEventListener('mouseup', () => {
     setTimeout(() => {
         isUserScrolling = false;
-    }, 100);
+    }, 200);
 });

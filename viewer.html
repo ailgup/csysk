@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+    <meta charset="UTF-8">
 <head>
     <title>Transcription Viewer</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -9,9 +10,16 @@
             background-color: yellow;
         }
         .speed-control{
+            font-family: "AvertaStd-Regular";
             height: 100%;
             margin-left: 10px;
             display: flex;
+            align-items: center;
+            flex-direction: column;
+        }
+        .speed-control-buttons{
+            display: flex;
+            flex-direction: row;
             align-items: center;
         }
         .audio-player {
@@ -35,19 +43,24 @@
             font-weight: bold;
             font-family: "AvertaStd-Regular";
         }
+        button{
+            margin: 7px;
+        }
     </style>
 </head>
 <body>
     <div class="audio-player">
         <audio id="audioPlayer" controls></audio>
         <div class="speed-control">
-            <span class="speed-decrease">&#9194;</span>
-            <span id="currentSpeed">1</span>
-            <span class="speed-increase">&#9193;</span>
+            <div>Speed:</div>
+            <div class="speed-control-buttons">
+                <span class="speed-control-buttons" id="speed-decrease">&#9194;</span>
+                <span id="currentSpeed">1</span>
+                <span class="speed-control-buttons"id="speed-increase">&#9193;</span>
+            </div>
         </div>
-        <button id="toggleConfidenceColor">Toggle Confidence Color</button>
-
-    </div>
+        <button id="toggleConfidenceColor">&#x1f3af;</button>
+        </div>
     <div class="text" id="transcription"></div>
 
     <script>
@@ -57,7 +70,7 @@
         audioPlayer.playbackRate = 1;
 
         // Decrease the playback speed when speed-decrease is clicked
-        document.querySelector('.speed-decrease').addEventListener('click', function() {
+        document.querySelector('#speed-decrease').addEventListener('click', function() {
             var currentSpeed = parseFloat($('#currentSpeed').text());
             if (currentSpeed > 0.5) {
                 $('#currentSpeed').text((currentSpeed - 0.25).toFixed(2));
@@ -66,16 +79,22 @@
         });
 
         // Increase the playback speed when speed-increase is clicked
-        document.querySelector('.speed-increase').addEventListener('click', function() {
+        document.querySelector('#speed-increase').addEventListener('click', function() {
             var currentSpeed = parseFloat($('#currentSpeed').text());
             if (currentSpeed < 3.0) {
                 $('#currentSpeed').text((currentSpeed + 0.25).toFixed(2));
                 audioPlayer.playbackRate = parseFloat(currentSpeed + 0.5);
             }
         });
+
+        // Get the filename from the URL path
+        var url = new URL(window.location.href);
+        var filename = url.searchParams.get("p")+".json";
+
         // Load the JSON file
-        $.getJSON('transcription_6c1d7dd5-0ffd-4775-8ca7-567a71836a01.json', function(data) {
-            var transcription = data.transcription.utterances;
+        $.getJSON('transcripts/'+filename, function(data) {
+            var transcription = data.result.transcription.utterances;
+            var audioUrl = data.request_params.audio_url;
 
             // Display the transcription text
             var transcriptionDiv = document.getElementById('transcription');
@@ -86,12 +105,10 @@
                 var text = item.text;
                 var timestamp = item.start;
                 var wordArray = item.words;
-                
 
                 var speakerSpan = document.createElement('span');
                 speakerSpan.innerHTML = "";
                 speakerSpan.className = "speaker";
-                //span.setAttribute('timestamp',timestamp);
                 if (speaker != previousSpeaker) {
                     //add last paragraph, and begin a new one
                     transcriptionDiv.appendChild(paragraphSpan);
@@ -108,10 +125,9 @@
                     wordSpan.innerHTML = words.word + " ";
                     wordSpan.setAttribute('timestamp', words.start);
                     wordSpan.setAttribute('confidence', words.confidence);
+                    wordSpan.setAttribute('confidence_color', getBackgroundColor(parseFloat(words.confidence)));
+                    //wordSpan.style.backgroundColor = getBackgroundColor(parseFloat(words.confidence));
                     wordSpan.className = "dictation";
-                    var backgroundColor = getBackgroundColor(parseFloat(words.confidence));
-                    //console.log(words.confidence);
-                    wordSpan.style.backgroundColor = backgroundColor;
                     paragraphSpan.appendChild(wordSpan);
                 });
                 
@@ -119,9 +135,9 @@
                 previousSpeaker = speaker;
             });
 
-            // Load the MP3 file
-            var audioPlayer = document.getElementById('audioPlayer');
-            audioPlayer.src = '029-Creation-and-Evolution.mp3';
+            // Load the MP3 data
+            audioPlayer.src = audioUrl;
+
             // Add event listener for space bar key press
             document.addEventListener('keydown', function(event) {
                 if (event.code === 'Space' && event.target === document.body) {
@@ -140,41 +156,49 @@
             $('span').click(function() {
                 var timestamp = $(this).attr('timestamp');
                 if (!isNaN(parseFloat(timestamp))) {
-                    console.log("update");
                     audioPlayer.currentTime = parseFloat(timestamp);
                 }
             });
+            
+            var transcriptionDiv = document.getElementById('transcription');
 
-// Define a function to map confidence values to background colors
-function getBackgroundColor(confidence) {
-    // Define mapping between confidence values and background colors
-    var colorMap = [
-        { minConfidence: 0, color: 'red' },
-        { minConfidence: 0.2, color: 'darkorange' },
-        { minConfidence: 0.4, color: 'orange' },
-        { minConfidence: 0.6, color: 'gold' },
-        { minConfidence: 0.8, color: 'lightgreen' },
-        { minConfidence: 1, color: 'green' }
-    ];
+            $("#toggleConfidenceColor").click(function() {
+                console.log('clicked');
+                //transcriptionDiv.classList.toggle('highlight');
+                if ($('span.dictation').attr('style')) {
+                    $('span.dictation').removeAttr('style');
+                } else {
+                    $('span.dictation').each(function() {
+                        $(this).attr('style', 'background-color: ' + $(this).attr('confidence_color'));
+                    });
+                }
+                //$('span.dictation').toggle('backgroundColor');
+            });
+            // Define a function to map confidence values to background colors
+            function getBackgroundColor(confidence) {
+                // Define mapping between confidence values and background colors
+                var colorMap = [
+                    { minConfidence: 0, color: 'red' },
+                    { minConfidence: 0.2, color: 'darkorange' },
+                    { minConfidence: 0.4, color: 'orange' },
+                    { minConfidence: 0.6, color: 'gold' },
+                    { minConfidence: 0.8, color: 'lightgreen' },
+                    { minConfidence: 1, color: 'green' }
+                ];
 
-    // Find the appropriate background color based on confidence value
-    for (var i = colorMap.length-1; i >= 0 ; i--) {
-        
-        if (parseFloat(confidence) >= colorMap[i].minConfidence) {
-            console.log(parseFloat(confidence) +">="+ colorMap[i].minConfidence)
-            return colorMap[i].color;
-        }
-        
-    }
+                // Find the appropriate background color based on confidence value
+                for (var i = colorMap.length-1; i >= 0 ; i--) {
+                    if (parseFloat(confidence) >= colorMap[i].minConfidence) {
+                        return colorMap[i].color;
+                    }
+                }
 
-    // Default to white if confidence value is out of range
-    return 'white';
-}
+                // Default to white if confidence value is out of range
+                return 'white';
+            }
         });
     </script>
-        <script src="autoScroll.js"></script>
-        <script src="highlight.js"></script>
-
-
+    <script src="autoScroll.js"></script>
+    <script src="highlight.js"></script>
 </body>
 </html>
