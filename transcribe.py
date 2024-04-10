@@ -107,7 +107,12 @@ async def transcribe_audio(entry, key):
     print(f"Transcription for {podcast_name} saved to {json_filename}.json")
     #print(f"Transcription for {podcast_name}: {transcription}")
     return 
-
+def check_keys():
+    for key in API_KEYS:
+        monthly_time = get_usage(key['key'])
+        print("Monthly usage:", key['key'][:5], ":", int(monthly_time), "seconds ", int(100 - monthly_time/(KEY_MONTHLY_LIMIT) * 100), "%")
+        key['billing_time'] = monthly_time
+    return
 def time_to_seconds(time_str):
     # Split the time string into hours, minutes, and seconds
     hours, minutes, seconds = map(int, time_str.split(':'))
@@ -125,12 +130,8 @@ async def worker(queue, key):
 async def main():
     
     #determine key availability
-    for key in API_KEYS:
-        monthly_time = get_usage(key['key'])
-        print("Monthly usage for key", key['key'][:5], ":", monthly_time, "seconds")
-        print("Availability for key", key['key'], ":", 100 - monthly_time/(KEY_MONTHLY_LIMIT) * 100, "%")
-        key['billing_time'] = monthly_time
 
+    check_keys()
     
     queue = Queue(maxsize=QUEUE_MAX_SIZE)
     entries = get_entries(API_KEYS[0]['key'])

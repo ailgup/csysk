@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Podcast Episodes</title>
+</head>
+<body>
+    <h1>Podcast Episodes</h1>
+    <table id="episodesTable">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>#</th>
+                <th>Title</th>
+                <th>Subtitle</th>
+                <th>Description</th>
+                <th>Date</th>
+                <th>Downloaded</th>
+            </tr>
+        </thead>
+        <tbody id="episodesBody">
+            <!-- Episodes will be dynamically inserted here -->
+        </tbody>
+    </table>
+
+    <script>
+        // Function to fetch podcast RSS feeds and update the table
+        async function fetchPodcastEpisodes(feedUrls, downloadedEpisodes) {
+            const episodesBody = document.getElementById('episodesBody');
+            var episode_index = 1;
+            for (const feedUrl of feedUrls) {
+                const response = await fetch(feedUrl["url"]);
+                const xmlText = await response.text();
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+                const items = xmlDoc.querySelectorAll('item');
+                var item;
+                // Boolean variable
+                var countUp = feedUrl["forward"]; // Set to false if you want to count down
+
+                // Variable to determine the loop condition
+                var loopCondition;
+
+                // Depending on the value of countUp, set the loop condition and step
+                if (countUp) {
+                    loopCondition = items.length-1; // Count up to 10
+                } else {
+                    loopCondition = 0; // Count down from 10
+                }
+                // Loop
+                for (var i = (countUp ? 0 : items.length-1); (countUp ? i < loopCondition : i >= loopCondition); (countUp ? i++ : i--)) {
+                    item = items[i];
+
+                    const episode_number_element = item.querySelector('episode');
+                    const episode_number = episode_number_element ? episode_number_element.textContent : "";
+
+                    const title = item.querySelector('title').textContent;
+
+                    const subtitle_element = item.querySelector("subtitle")
+                    var subtitle = subtitle_element ? subtitle_element.textContent.trim() : "";
+
+                    const duration_element = item.querySelector("duration")
+                    const duration = duration_element ? duration_element.textContent : "";
+                    
+                    const description_element = item.querySelector("description")
+                    var description = description_element ? description_element.textContent.trim() : "";
+                    description = description=="No Description" ? "" : description; 
+                    description = description==subtitle ? "" : description; 
+
+                    const date = new Date(item.querySelector('pubDate').textContent).toLocaleDateString();
+                    var fileUrl = item.querySelector('guid').textContent
+                    //console.log(fileUrl);
+                    if (fileUrl.includes("mp3") || fileUrl.includes("m4a")) {
+                        fileUrl = fileUrl.match(/\/(\d+-[\w-]+)\.(mp3|m4a)$/)[1];
+                    } 
+                    
+                    var local_transcript_url="#"
+
+                    //console.log(fileUrl);
+                    const row = document.createElement('tr');
+                    var downloaded = false;
+                    for (const key in downloadedEpisodes) {               
+                        if (downloadedEpisodes.hasOwnProperty(key)) {
+                            json_filename = key.split(".")[0]
+                            //console.log(key, fileUrl)
+                            if (json_filename === fileUrl) {
+                                downloaded = true;
+                                local_transcript_url = `viewer.html?p=${fileUrl}`
+                            }
+                        }
+                    }
+
+                    row.innerHTML = `
+                        <td>${episode_index}</td>
+                        <td>${episode_number}</td>
+                        <td><a href="${local_transcript_url}" target="_blank">${title}</a></td>
+                        <td>${subtitle}</td>
+                        <td>${description}</td>
+                        <td>${date}</td>
+                        <td>${downloaded ? '✅' : '❌'}</td>
+                    `;
+                    episodesBody.appendChild(row);
+                    episode_index++;
+                }
+                
+            }
+        }
+
+        // Function to fetch downloaded episodes from JSON file
+        async function fetchDownloadedEpisodes() {
+            const response = await fetch('metadata.json');
+            const data = await response.json();
+            
+            return data;
+        }
+
+        // Entry point
+        async function main() {
+            const feedUrls = [{url:'https://pinecast.com/feed/catholicstuff2010-2013',forward:1},{
+                url:'https://pinecast.com/feed/catholicstuff2014-2019',forward:1}, 
+            {url:'https://pinecast.com/feed/catholicstuff',forward:0}];
+            const downloadedEpisodes = await fetchDownloadedEpisodes();
+            await fetchPodcastEpisodes(feedUrls, downloadedEpisodes);
+        }
+
+        main();
+    </script>
+</body>
+</html>
