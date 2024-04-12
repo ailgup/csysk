@@ -102,6 +102,5 @@ def get_entries(key):
     return todo
 if __name__ == "__main__":
     get_todo()
-    #main("25e814bc-0df6-43fe-90af-2e53c2e5de02")
     #for key in API_KEYS:
     #    get_entries(key["key"])

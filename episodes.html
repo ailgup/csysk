@@ -4,18 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Podcast Episodes</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@latest/dist/css/tabler.min.css">
+    <style>
+          .expandable-content {
+            display: none;
+        }
+        #episodesTable td {
+            padding: .25rem .25rem;
+        }
+    </style>
 </head>
 <body>
     <h1>Podcast Episodes</h1>
-    <table id="episodesTable">
+    <table class="table" id="episodesTable">
         <thead>
             <tr>
                 <th>#</th>
                 <th>#</th>
-                <th>Title</th>
-                <th>Subtitle</th>
-                <th>Description</th>
                 <th>Date</th>
+                <th>Title</th>
+                <th>Hosts</th>
                 <th>Downloaded</th>
             </tr>
         </thead>
@@ -25,6 +33,76 @@
     </table>
 
     <script>
+        // Function to convert XML to JSON
+        function xmlToJson(xml) {
+            var jsonObj = {};
+
+            if (xml.nodeType === 1) { // element
+                // Recursively process child nodes
+                if (xml.attributes.length > 0) {
+                jsonObj['@attributes'] = {};
+                for (let i = 0; i < xml.attributes.length; i++) {
+                    const attribute = xml.attributes.item(i);
+                    jsonObj['@attributes'][attribute.nodeName] = attribute.nodeValue;
+                }
+                }
+            } else if (xml.nodeType === 3) { // text
+                jsonObj = xml.nodeValue.trim();
+            }
+
+            // Process child nodes
+            if (xml.hasChildNodes()) {
+                for (let i = 0; i < xml.childNodes.length; i++) {
+                const item = xml.childNodes.item(i);
+                const nodeName = item.nodeName;
+                
+                if (typeof(jsonObj[nodeName]) === 'undefined') {
+                    jsonObj[nodeName] = xmlToJson(item);
+                } else {
+                    if (typeof(jsonObj[nodeName].push) === 'undefined') {
+                    const old = jsonObj[nodeName];
+                    jsonObj[nodeName] = [];
+                    jsonObj[nodeName].push(old);
+                    }
+                    jsonObj[nodeName].push(xmlToJson(item));
+                }
+                }
+            }
+            return jsonObj;
+        }
+
+        function findWebsiteData(items){
+            console.log("finding");
+            var finished_items = [];
+            const jsonUrl = 'website_scraped_data.json';
+            // Fetch the JSON file
+            const jsonResponse = fetch(jsonUrl)
+                .then(response => response.json())
+                .then(jsonData => {
+                    for (const item of items) {   
+                        const itemTitle = item.title['#text']; // Assuming the item has an "id" property
+                        //console.log(itemTitle)
+                        // Find the item with matching id
+                        //console.log(item.title['#text']+" "+itemTitle)
+                        
+                        const matchingItem = jsonData.find(item => item.title === itemTitle);
+                        //console.log(matchingItem)
+                        item.website = matchingItem
+                        finished_items.push(item)
+                       
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching JSON:', error);
+                });
+
+                
+
+            // Return the matching items
+            //console.log(finished_items);
+            return finished_items;
+        }
+        
         // Function to fetch podcast RSS feeds and update the table
         async function fetchPodcastEpisodes(feedUrls, downloadedEpisodes) {
             const episodesBody = document.getElementById('episodesBody');
@@ -34,24 +112,16 @@
                 const xmlText = await response.text();
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-                const items = xmlDoc.querySelectorAll('item');
-                var item;
-                // Boolean variable
-                var countUp = feedUrl["forward"]; // Set to false if you want to count down
-
-                // Variable to determine the loop condition
-                var loopCondition;
-
-                // Depending on the value of countUp, set the loop condition and step
-                if (countUp) {
-                    loopCondition = items.length-1; // Count up to 10
-                } else {
-                    loopCondition = 0; // Count down from 10
-                }
-                // Loop
-                for (var i = (countUp ? 0 : items.length-1); (countUp ? i < loopCondition : i >= loopCondition); (countUp ? i++ : i--)) {
-                    item = items[i];
-
+                var items = xmlDoc.querySelectorAll('item');
+                items = Array.from(items).map(item => xmlToJson(item));
+                
+                items = await findWebsiteData(items)
+                console.log(typeof items);
+                items.forEach(function(item) {
+                    console.log(item)
+                    const episode_number = item.episode_number ? item.episode_number : "";
+                    console.log(episode_number)
+/*
                     const episode_number_element = item.querySelector('episode');
                     const episode_number = episode_number_element ? episode_number_element.textContent : "";
 
@@ -69,6 +139,7 @@
                     description = description==subtitle ? "" : description; 
 
                     const date = new Date(item.querySelector('pubDate').textContent).toLocaleDateString();
+  */
                     var fileUrl = item.querySelector('guid').textContent
                     //console.log(fileUrl);
                     if (fileUrl.includes("mp3") || fileUrl.includes("m4a")) {
@@ -94,16 +165,21 @@
                     row.innerHTML = `
                         <td>${episode_index}</td>
                         <td>${episode_number}</td>
-                        <td><a href="${local_transcript_url}" target="_blank">${title}</a></td>
-                        <td>${subtitle}</td>
-                        <td>${description}</td>
-                        <td>${date}</td>
+                        <td>${new Date(date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}</td>
+                        <td class="expandable-cell">
+                            <a href="${local_transcript_url}" target="_blank">🎧</a>
+                            <a href="#" class="toggle-link" >${title}</a>
+                            <div class="expandable-content">
+                                ${subtitle}<br>${description}
+                            </div>
+                        </td>
+                        <td>${item.website ? '✅' : '❌'}</td>
                         <td>${downloaded ? '✅' : '❌'}</td>
                     `;
                     episodesBody.appendChild(row);
                     episode_index++;
-                }
-                
+                });
+            
             }
         }
 
@@ -114,7 +190,16 @@
             
             return data;
         }
-
+        function findNextSiblingWithClass(element, className) {
+            let nextSibling = element.nextElementSibling;
+            while (nextSibling) {
+            if (nextSibling.classList.contains(className)) {
+                return nextSibling;
+            }
+            nextSibling = nextSibling.nextElementSibling;
+            }
+            return null; // Return null if the sibling with the specified class is not found
+        }
         // Entry point
         async function main() {
             const feedUrls = [{url:'https://pinecast.com/feed/catholicstuff2010-2013',forward:1},{
@@ -122,9 +207,25 @@
             {url:'https://pinecast.com/feed/catholicstuff',forward:0}];
             const downloadedEpisodes = await fetchDownloadedEpisodes();
             await fetchPodcastEpisodes(feedUrls, downloadedEpisodes);
-        }
 
+                document.addEventListener('click', function (event) {
+                // Check if the clicked element has the class toggle-link
+                console.log(event.target)
+                if (event.target.classList.contains('toggle-link')) {
+                    event.preventDefault();
+                    const content = findNextSiblingWithClass(event.target, 'expandable-content');
+                    if (content) {
+                        if (content.style.display === 'block') {
+                            content.style.display = 'none';
+                        } else {
+                            content.style.display = 'block';
+                        }
+                    }
+                }
+                });
+        }
         main();
     </script>
+
 </body>
 </html>
