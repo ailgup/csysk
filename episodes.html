@@ -24,6 +24,7 @@
                 <th>Date</th>
                 <th>Title</th>
                 <th>Hosts</th>
+                <th>Website Match</th>
                 <th>Downloaded</th>
             </tr>
         </thead>
@@ -70,38 +71,49 @@
             }
             return jsonObj;
         }
+async function findWebsiteData(items) {
+    const jsonUrl = 'website_scraped_data.json';
+    try {
+        // Fetch the JSON file
+        const response = await fetch(jsonUrl);
+        const jsonData = await response.json();
 
-        function findWebsiteData(items){
-            console.log("finding");
-            var finished_items = [];
-            const jsonUrl = 'website_scraped_data.json';
-            // Fetch the JSON file
-            const jsonResponse = fetch(jsonUrl)
-                .then(response => response.json())
-                .then(jsonData => {
-                    for (const item of items) {   
-                        const itemTitle = item.title['#text']; // Assuming the item has an "id" property
-                        //console.log(itemTitle)
-                        // Find the item with matching id
-                        //console.log(item.title['#text']+" "+itemTitle)
-                        
-                        const matchingItem = jsonData.find(item => item.title === itemTitle);
-                        //console.log(matchingItem)
-                        item.website = matchingItem
-                        finished_items.push(item)
-                       
+        // Map items to promises of updating website data
+        const updatedItems = await Promise.all(items.map(async (item) => {
+            const itemTitle = item.title['#text'].trim();
+            const matchingItem = jsonData.find(dataItem => dataItem.title === itemTitle);
+
+            if (matchingItem) {
+                item.website = matchingItem;
+            } else {
+                // Find closest match
+                let closestMatch = null;
+                let maxSimilarity = -1;
+                for (const dataItem of jsonData) {
+                    const similarity = calculateStringSimilarity(itemTitle, dataItem.title);
+                    if (similarity > maxSimilarity) {
+                        maxSimilarity = similarity;
+                        closestMatch = dataItem;
                     }
-                })
-                .catch(error => {
-                    console.error('Error fetching JSON:', error);
-                });
+                }
+                if (closestMatch) {
+                    console.log("No exact match for ", itemTitle, ". Closest match found:", closestMatch.title);
+                    item.website = closestMatch;
+                } else {
+                    console.log("No match found for ", itemTitle);
+                }
+            }
+            return item;
+        }));
 
-                
+        return updatedItems;
+    } catch (error) {
+        console.error('Error fetching or processing JSON:', error);
+        // Return original items in case of error
+        return items;
+    }
+}
 
-            // Return the matching items
-            //console.log(finished_items);
-            return finished_items;
-        }
         
         // Function to fetch podcast RSS feeds and update the table
         async function fetchPodcastEpisodes(feedUrls, downloadedEpisodes) {
@@ -113,19 +125,22 @@
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
                 var items = xmlDoc.querySelectorAll('item');
-                items = Array.from(items).map(item => xmlToJson(item));
-                
-                items = await findWebsiteData(items)
-                console.log(typeof items);
+                items = Array.from(items)
+                items = items.map(item => xmlToJson(item));
+                await findWebsiteData(items)
+
                 items.forEach(function(item) {
-                    console.log(item)
-                    const episode_number = item.episode_number ? item.episode_number : "";
-                    console.log(episode_number)
+
+                    //console.log(item)
+                    var episode_number = ""
+                    if (item.website) {
+                        episode_number = item.website.episode_number
+                    }
 /*
                     const episode_number_element = item.querySelector('episode');
                     const episode_number = episode_number_element ? episode_number_element.textContent : "";
 
-                    const title = item.querySelector('title').textContent;
+                    
 
                     const subtitle_element = item.querySelector("subtitle")
                     var subtitle = subtitle_element ? subtitle_element.textContent.trim() : "";
@@ -137,10 +152,15 @@
                     var description = description_element ? description_element.textContent.trim() : "";
                     description = description=="No Description" ? "" : description; 
                     description = description==subtitle ? "" : description; 
+*/
+                    const hosts = fetchAttribute(item,'hosts');
+                    const date = new Date(item.pubDate['#text']).toLocaleDateString();
+                    const title = fetchAttribute(item,'title');
+                    var subtitle = fetchAttribute(item,['itunes:subtitle']);
 
-                    const date = new Date(item.querySelector('pubDate').textContent).toLocaleDateString();
-  */
-                    var fileUrl = item.querySelector('guid').textContent
+                    const description = fetchAttribute(item.website,'description');
+                    const duration = fetchAttribute(item,'itunes:duration');
+                    var fileUrl = item['guid']["#text"]
                     //console.log(fileUrl);
                     if (fileUrl.includes("mp3") || fileUrl.includes("m4a")) {
                         fileUrl = fileUrl.match(/\/(\d+-[\w-]+)\.(mp3|m4a)$/)[1];
@@ -153,14 +173,17 @@
                     var downloaded = false;
                     for (const key in downloadedEpisodes) {               
                         if (downloadedEpisodes.hasOwnProperty(key)) {
-                            json_filename = key.split(".")[0]
+                            json_filename = key.split(".")[0].trim()
                             //console.log(key, fileUrl)
-                            if (json_filename === fileUrl) {
+                            if (json_filename === fileUrl.trim()) {
                                 downloaded = true;
                                 local_transcript_url = `viewer.html?p=${fileUrl}`
                             }
                         }
-                    }
+                        
+                    }if (! downloaded) {
+                            console.log("Not downloaded", fileUrl)
+                        }
 
                     row.innerHTML = `
                         <td>${episode_index}</td>
@@ -173,6 +196,7 @@
                                 ${subtitle}<br>${description}
                             </div>
                         </td>
+                        <td>${hosts ? '✅' : '❌'}</td>
                         <td>${item.website ? '✅' : '❌'}</td>
                         <td>${downloaded ? '✅' : '❌'}</td>
                     `;
@@ -183,6 +207,24 @@
             }
         }
 
+        function fetchAttribute(item, attribute,text=true) {
+            if (item) {
+                if (item[attribute]){
+                    if (text) {
+                        return item[attribute]['#text']
+                    }
+                    else {
+                    return item[attribute]
+                    }
+                } 
+                else {
+                    return ""
+                }
+            }
+            else {
+                return ""
+            }
+        }
         // Function to fetch downloaded episodes from JSON file
         async function fetchDownloadedEpisodes() {
             const response = await fetch('metadata.json');
@@ -227,5 +269,6 @@
         main();
     </script>
 
+<script src="stringSimilarity.js"></script>
 </body>
 </html>

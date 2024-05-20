@@ -19,7 +19,7 @@ from keys import API_KEYS
 # Define the maximum number of concurrent tasks per API key
 MAX_CONCURRENT_TASKS_PER_KEY = 3
 KEY_MONTHLY_LIMIT = 60*60*10 #10 hrs
-QUEUE_MAX_SIZE = 60
+QUEUE_MAX_SIZE = 40
 
 # Function to rotate API keys
 def get_api_key(duration):
